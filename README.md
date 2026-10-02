@@ -1,0 +1,123 @@
+# Multi-Hop RAG Research Synthesis Assistant
+
+A local research prototype that decomposes a question, retrieves academic evidence over bounded hops, writes cited claims, audits each claim, and revises once when the audit flags a problem.
+
+The starter corpus covers **RAG and multi-hop question answering**. The pipeline uses plain Python; embeddings and Chroma stay local. All LLM calls, including JSON repair and revision, pass through `llm_call(prompt: str) -> str` in `llm/watsonx_client.py`.
+
+## Quick start
+
+Use Python **3.12** (the tested version). Run commands from the repository root.
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+cp .env.example .env
+```
+
+Set `WATSONX_APIKEY`, `WATSONX_PROJECT_ID`, `WATSONX_URL`, and `WATSONX_MODEL_ID` in your local `.env`. Never commit credentials. The example model ID is `ibm/granite-3-3-8b-instruct`, listed in IBM's catalog; availability depends on the region and account. Validate the actual configuration before inference:
+
+```bash
+python -m llm.watsonx_client
+python -m ingestion.fetch_papers
+uvicorn api.main:app --host 127.0.0.1 --port 8000
+```
+
+In another terminal, activate the same environment and run:
+
+```bash
+streamlit run frontend/app.py --server.address 127.0.0.1
+```
+
+Open Streamlit at `http://127.0.0.1:8501`; API documentation is at `http://127.0.0.1:8000/docs`. These are local development services, without authentication or production deployment configuration.
+
+Ingestion downloads the 15 curated papers in `ingestion/corpus.json` using the arXiv API and downloads the BGE model on first use. PDFs, model files, metadata and the persistent index are stored under ignored `data/`. Re-running ingestion reuses versioned PDFs and replaces stale chunks for each paper. Do not run indexing concurrently with evaluation. To use a different corpus:
+
+```bash
+python -m ingestion.fetch_papers --query 'all:"retrieval augmented generation"' --limit 20
+```
+
+Use a **new `CHROMA_COLLECTION`** when switching corpora; existing papers are otherwise retained. Adapt the evaluation questions and expected-paper labels to match. `--limit` applies to topic search; curated mode always fetches the 15 specified IDs.
+
+After the initial model download, set `HF_HUB_OFFLINE=1` to prevent Hugging Face metadata requests. To rebuild the index after changing chunking without refetching papers: `HF_HUB_OFFLINE=1 python -m ingestion.fetch_papers --reindex-local`.
+
+## Request and output
+
+```bash
+curl http://127.0.0.1:8000/ask \
+  -H 'Content-Type: application/json' \
+  -d '{"question":"How do IRCoT and Self-RAG decide when to retrieve evidence?","critique":true,"max_hops":2,"top_k":4}'
+```
+
+`POST /ask` returns structured draft and final claims, rendered answers, source excerpts with paper/section/PDF-page provenance, retrieval decisions, critique verdicts, and warnings. The Streamlit interface exposes the draft, final answer, citations and collapsible traces. `critique=false` returns the unaudited draft for interactive comparison.
+
+1. Decompose into 2–4 atomic questions.
+2. Retrieve top-k chunks for each subquestion. This initial batch counts as **hop 1**.
+3. Ask the controller whether evidence suffices. Additional hops retrieve one targeted query each. Maximum 1–3 total hops; default 2. Repeated queries stop the loop.
+4. Deduplicate evidence by chunk ID and cap context at 24 chunks, reserving capacity for later hops. Round-robin selection preserves subquestion coverage under the cap.
+5. Synthesize atomic claims, each with chunk citation IDs; contradictions must also be cited claims. An answer can be partial or abstain when evidence is missing.
+6. Audit every claim for entailment, including scope, numerical results and comparisons. Reject incomplete/duplicate critic coverage; deterministically flag invalid citations even if the model calls them supported.
+7. If any claim is flagged, revise once and audit again. **Remaining problems stay visible in the critique log and warnings.** This is not a guarantee that the final answer is correct.
+
+All structured model outputs receive at most **one repair attempt**, including schema errors. On a JSON parse error, the repair prompt includes the required text: “your last response was not valid JSON — return only the JSON object”. A second failure aborts the request with an explicit error. Provider failures are surfaced, never replaced by simulated research answers.
+
+The section-aware chunker detects common and numbered headings, packs paragraphs within sections, and only splits oversized text to a 480-token budget using BGE's tokenizer. It preserves section and page provenance and avoids combining sections. Heading detection is heuristic; complex two-column layouts, tables, scanned PDFs and unusual headings require manual inspection. OCR is not implemented. Retrieved material is explicitly treated as untrusted data in reasoning prompts.
+
+## Evaluation
+
+`eval/eval_questions.json` contains **18 hand-authored starter questions**: 5 single-hop controls, 9 multi-hop comparisons and 4 adversarial/no-answer cases. Each includes expected papers and a reference answer or rubric. Labels are marked **provisional**: review them against the downloaded paper versions and freeze the dataset before reporting research results. Reference answers are for reviewers, never supplied to the answering pipeline.
+
+```bash
+python -m eval.run_eval
+```
+
+Each question runs once with critique enabled. Its exact original draft is the “without critique” arm and its final answer is the “with critique” arm. Both arms therefore share the same retrieval, draft and evidence. This isolates the revision loop from retrieval and sampling changes. It does not measure an independent retrieve-once baseline.
+
+Timestamped output directories contain full per-question results, `run.json`, and shuffled `human-review.json`. Errors are recorded explicitly, checkpointed after every question, and cause a nonzero exit status. Do not report partial runs as complete experiments. The run records model, region, request settings, question hash and corpus-manifest hash; archive the environment lock and source revision with reported experiments.
+
+Metrics:
+
+- **Claim-support rate:** supported claims / all emitted claims, pooled across successful questions, separately for each arm. Zero claims yields `null`, never a perfect score.
+- **Hop recall:** unique expected papers cited / unique expected papers, averaged over multi-hop questions. Retrieved-but-uncited papers do not count. This measures paper coverage, not correctness of the reasoning chain.
+- **Answerable response rate** and **no-answer abstention rate:** reported alongside support to expose gains obtained simply by deleting claims or abstaining.
+
+The automatic report is labeled **internal critic proxy, not independent ground truth**. Using the same LLM as generator and judge can reinforce its mistakes. For a defensible headline, give `human-review.json` to a reviewer without the arm mapping in `run.json`; fill each `label` with `supported`, `unsupported`, or `contradicted`, then score:
+
+```bash
+python -m eval.run_eval \
+  --score-run eval/results/RUN_ID/run.json \
+  --annotations eval/results/RUN_ID/human-review.json
+```
+
+Support means the **entire claim** is entailed by its cited excerpts. Missing/invalid citations, unsupported specificity and overstated causality fail support. Review claim atomicity too: compound claims should be split before the benchmark is frozen. Limitations are restricted by prompt to missing evidence/scope and excluded from claim scoring; a reviewer must check that factual assertions have not leaked there. For stronger reporting, use two independent reviewers and resolve disagreements. The scorer requires complete labels and matching run IDs, and writes a separate `human-report.json`. No benchmark improvement is claimed before actual evaluation.
+
+## Development and structure
+
+```text
+ingestion/    arXiv fetch, PDF parsing, section-aware chunks, curated corpus
+retrieval/    local BGE embeddings and persistent Chroma
+llm/          isolated watsonx integration and shared JSON retry
+reasoning/    schemas, decomposition, hop controller, synthesis, critic, pipeline
+eval/         questions, paired evaluation, metrics, human annotation scoring
+api/          FastAPI POST /ask
+frontend/     Streamlit interface
+tests/        offline behavior and local integration tests
+```
+
+```bash
+python -m pytest -q
+pip check
+```
+
+Tests exercise JSON/schema repair, the shared provider boundary, bounded hops and revision, citation integrity, critic completeness, abstention, metrics, real PDF extraction, persistent Chroma with deterministic test embeddings, and API validation. They do not require credentials or model downloads, and do not establish model answer quality. `requirements.lock.txt` records the installed Python 3.12/macOS environment; `requirements.txt` gives compatible dependency ranges for other platforms.
+
+Live synthesis and model validation require your configured watsonx project. The SDK validates the model in that region; no silent fallback is used. Request state is isolated; calls on the shared SDK session are serialized. This prototype is optimized for a local research workflow rather than multi-user throughput.
+
+Initial local verification: 30 tests pass; 15 papers are indexed into 780 chunks with a maximum of 480 BGE tokens each. Real BGE retrieval smoke checks found the expected paper for four of five query variants. The short query “HotpotQA supporting facts dataset” retrieved papers discussing that dataset instead of the original paper in its top four. This query sensitivity is a known tuning target, not a measured benchmark result. Local details are saved in `data/validation.json`. Live watsonx inference and the 18-question benchmark have not been run because credentials are not configured.
+
+## Primary references used for implementation
+
+- [IBM ModelInference SDK](https://ibm.github.io/watsonx-ai-python-sdk/v1.4.11/fm_model_inference.html) and [supported model catalog](https://dataplatform.cloud.ibm.com/docs/content/wsj/analyze-data/fm-models.html?context=wx&locale=en)
+- [BGE-small-en-v1.5 model card](https://huggingface.co/BAAI/bge-small-en-v1.5): local normalized embeddings and retrieval query instruction
+- [Chroma Python client](https://docs.trychroma.com/reference/python/client): persistent local storage
+- Corpus IDs link to primary papers as `https://arxiv.org/abs/ID`; downloaded metadata records versioned source URLs.

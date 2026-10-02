@@ -1,0 +1,20 @@
+{
+  "topic": "RAG and multi-hop question answering",
+  "papers": [
+    {"id": "2005.11401", "label": "Retrieval-Augmented Generation"},
+    {"id": "2310.11511", "label": "Self-RAG"},
+    {"id": "2212.10509", "label": "IRCoT"},
+    {"id": "2305.06983", "label": "FLARE"},
+    {"id": "2210.03629", "label": "ReAct"},
+    {"id": "1809.09600", "label": "HotpotQA"},
+    {"id": "2009.12756", "label": "Multi-hop Dense Retrieval"},
+    {"id": "2004.04906", "label": "Dense Passage Retrieval"},
+    {"id": "2002.08909", "label": "REALM"},
+    {"id": "2007.01282", "label": "Fusion-in-Decoder"},
+    {"id": "2208.03299", "label": "Atlas"},
+    {"id": "2310.04406", "label": "Language Agent Tree Search"},
+    {"id": "2401.15884", "label": "Corrective RAG"},
+    {"id": "2401.18059", "label": "RAPTOR"},
+    {"id": "2312.10997", "label": "RAG Survey"}
+  ]
+}
