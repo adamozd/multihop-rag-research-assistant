@@ -69,11 +69,14 @@ The shared LLM client uses watsonx's chat endpoint so instruction models receive
 
 ## Evaluation
 
-`eval/eval_questions.json` contains **18 hand-authored starter questions**: 5 single-hop controls, 9 multi-hop comparisons and 4 adversarial/no-answer cases. Each includes expected papers and a reference answer or rubric. Labels are marked **provisional**: review them against the downloaded paper versions and freeze the dataset before reporting research results. Reference answers are for reviewers, never supplied to the answering pipeline.
+`eval/eval_questions.json` contains 18 starter questions: 5 single-hop controls, 9 multi-hop comparisons and 4 adversarial/no-answer cases. The first live run uses the frozen snapshot in `eval/benchmarks/v1/questions.json`, with its hash recorded in `manifest.json`. Expected-paper and abstention labels were frozen before inference but are **not independently human-validated**. Reference answers are for reviewers, never supplied to the answering pipeline. This is a development benchmark; the comparison question was used during development.
 
 ```bash
-python -m eval.run_eval
+HF_HUB_OFFLINE=1 python -m eval.run_eval --questions eval/benchmarks/v1/questions.json
+HF_HUB_OFFLINE=1 python -m eval.run_acceptance
 ```
+
+These commands consume watsonx quota. **The current runner has no resume support**: invoking it again starts a new run. Preserve existing results and add verified resume support before retrying the failed questions. See [human-review instructions](eval/HUMAN_REVIEW.md).
 
 Each question runs once with critique enabled. Its exact original draft is the “without critique” arm and its final answer is the “with critique” arm. Both arms therefore share the same retrieval, draft and evidence. This isolates the revision loop from retrieval and sampling changes. It does not measure an independent retrieve-once baseline.
 
@@ -125,13 +128,23 @@ Decomposition now restricts itself to the requested facet. Every insufficient ho
 
 To inspect the refreshed interface, restart the API and Streamlit using the startup commands above (or the VS Code Full app configuration). Search settings are in the sidebar. Results have Answer, Sources, Review and Retrieval tabs; numbered paper citations map to source excerpts, while the downloaded JSON preserves the original evidence IDs.
 
-Next live acceptance checks:
+## Live evaluation status — 2026-10-05
 
-1. Ask “How do IRCoT and Self-RAG decide when to retrieve evidence?” Verify that the subquestions stay on retrieval timing and the answer presents Self-RAG's threshold as an optional alternative.
-2. Inspect the cited excerpts and retrieval trace. An extra hop must target a specific missing fact, not an unrequested efficiency comparison.
-3. Review a claim requiring correction and a no-answer question. Confirm that revision corrects or removes unsupported claims, and that unresolved flags remain visible after the one-revision cap.
+Live watsonx testing **has been performed**, using Llama 3.3 70B Instruct in Toronto. The frozen 18-question benchmark was attempted; run `20261005T230218Z-ecad21ea` completed **11/18 questions** before token-quota exhaustion blocked the remainder. Provider logs also recorded one request-rate-limit response. A completed execution is not necessarily a correct or complete answer.
 
-The new prompts have not yet been tested against live watsonx. Scripted model tests verify control flow, not semantic model reliability. The full 18-question benchmark has not been run, and no improvement in claim support is claimed. See [ROADMAP.md](ROADMAP.md) for implementation status and remaining acceptance criteria.
+| Group | Completed | Planned |
+| --- | ---: | ---: |
+| Single-hop | 5 | 5 |
+| Multi-hop | 6 | 9 |
+| Adversarial/no-answer | 0 | 4 |
+
+The separate acceptance run `acceptance-20261005T230751Z` completed **0/3 probes** because quota was exhausted. These checks are blocked, not passed. An earlier user-run comparison did exercise live revision, but review found unsupported assertions surviving revision and inconsistent critic judgments.
+
+Across the 11 completed benchmark questions, the **internal critic proxy** changed from 33/36 supported claims (91.67%) to 32/33 (96.97%). Mean expected-paper recall across the six completed multi-hop cases fell from 83.33% to 75.00%; the answerable response rate was 10/11 in both arms. No-answer abstention was not measured. Two questions triggered revision. Fewer claims and lower paper recall mean the higher proxy rate must not be presented as proven answer-quality improvement.
+
+**Human-reviewed claim support has not been measured:** all 69 draft/final review items remain unlabeled. The full benchmark and semantic acceptance remain incomplete. [Sanitized results and limitations](eval/reports/README.md) are committed separately from ignored raw `eval/results/` files.
+
+Next: add quota-aware stopping and reproducible resume support; obtain available watsonx quota; complete the seven failed questions and three acceptance probes; obtain human labels and report the full results, including failures. Preserve the frozen baseline and record any resumed execution or configuration changes. See [ROADMAP.md](ROADMAP.md).
 
 ## Primary references used for implementation
 

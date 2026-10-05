@@ -1,0 +1,9 @@
+{
+  "version": "v1",
+  "frozen_at": "2026-10-05T22:58:44.033134+00:00",
+  "questions_sha256": "43a952d238f9f4dc0f459e7adbc12e91174d125501a7b955a87c2f740a951455",
+  "question_count": 18,
+  "source_revision": "083b697d1faa53d2ffb88dcc2d9bf69995e44ee7",
+  "label_policy": "Expected-paper and abstention labels frozen before inference; not represented as human-validated. Claim-support labels remain blank until human review. Do not change this baseline after seeing outcomes.",
+  "design": "Paired pre/post revision on the same retrieved evidence and draft; not independent pipeline runs. 5 single-hop, 9 multi-hop, 4 adversarial questions."
+}

@@ -1,0 +1,338 @@
+{
+  "run_id": "20261005T230218Z-ecad21ea",
+  "measurement": "internal_critic_proxy_not_independent_ground_truth",
+  "model_id": "meta-llama/llama-3-3-70b-instruct",
+  "region_url": "https://ca-tor.ml.cloud.ibm.com",
+  "python": "3.12.13",
+  "questions_sha256": "43a952d238f9f4dc0f459e7adbc12e91174d125501a7b955a87c2f740a951455",
+  "corpus_sha256": "aa8f4fc0be22fb195ee967d2824bd557f986961cf97d11aad9ecdaf1805b3210",
+  "source_revision": "083b697d1faa53d2ffb88dcc2d9bf69995e44ee7",
+  "source_sha256": {
+    "eval/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "eval/metrics.py": "97838616ee8822bf0a22cb208babecd382e06b796f4a8500d15d3aa920431c0f",
+    "eval/run_acceptance.py": "964c07f8e4839690b4d6b10bc1cc132b497397ef67e178b1562e065fc5e20b75",
+    "eval/run_eval.py": "210c05e53f968a191dcc1b9b884c5c07099ce7c27142bdcf5faaae0283918360",
+    "reasoning/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "reasoning/critic.py": "8bc4c8b376fde56ab83e8f6f1689934b087f3a52fbffdb051483ee658dbab84b",
+    "reasoning/decomposer.py": "ba51510b9eafce189998c89b1e04d4346220c620a75a4d0144062f89c8601a0f",
+    "reasoning/hop_controller.py": "8d71e30886b911c10e273544a0e915d29eab1f59595860c2b7b6f50c04bc636e",
+    "reasoning/models.py": "b0f692afdfbf110e1472d647e8035ca492694a29f2cd9f615c97339b2550d92e",
+    "reasoning/pipeline.py": "4278524dfdb403f99196d05d0ce0dfef2e6317e7524eb6c0f8ca69648d7e3e48",
+    "reasoning/prompts.py": "545d4ea200f5234d8d32f972d2b3a1bd1087aeabff1214d4e192fb801efdcc0b",
+    "reasoning/synthesizer.py": "2be8df879b75de7cfffa9b831b20402a9ea45bfb12aebb6564d9ff52300b8c9b",
+    "llm/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "llm/json_call.py": "a5d110c460a8fbeaeb72b59b2b8fd273653cb0bc08a9d26db4fe49cf828ba174",
+    "llm/watsonx_client.py": "4aa569b2d7df4c7348328c95b9e6084c0c195c3fc4fbb557e378da026f2e6a1b",
+    "retrieval/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "retrieval/embed.py": "7a78d2348c19cd415186af3af286ce353a8413e5d6b26f3962547e3a503e47e4",
+    "retrieval/retriever.py": "20a509a1cb98eb20c2b9d93a00d67ebeeeebe2289410c75576ed1c9a4b8edb5a",
+    "ingestion/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "ingestion/chunk.py": "f3f018fa0fdce5f3abb375a4e824492dfabdda2200dd62f07c7b708041a95b61",
+    "ingestion/fetch_papers.py": "4bcdf0ca91b1089d3f083138a5c653cda912302db3d2537c6fb17a80c6415605",
+    "ingestion/headings.py": "1ddfd958eda9d57105656454a22c214c8f3a17da05047dfaf08acdbf53c8d313",
+    "ingestion/parse_pdf.py": "157dada2729d9b2a45c7297775caa897d370e2ecdc4dc98d68e0d2ab55542a05"
+  },
+  "settings": {
+    "max_hops": 2,
+    "top_k": 4,
+    "max_revisions": 1
+  },
+  "max_new_tokens": "3000",
+  "expected_questions": 18,
+  "completed": false,
+  "metrics": {
+    "without_critique": {
+      "supported_claims": 33,
+      "total_claims": 36,
+      "claim_support_rate": 0.9166666666666666,
+      "mean_multi_hop_paper_recall": 0.8333333333333334,
+      "answerable_response_rate": 0.9090909090909091,
+      "no_answer_abstention_rate": null
+    },
+    "with_critique": {
+      "supported_claims": 32,
+      "total_claims": 33,
+      "claim_support_rate": 0.9696969696969697,
+      "mean_multi_hop_paper_recall": 0.75,
+      "answerable_response_rate": 0.9090909090909091,
+      "no_answer_abstention_rate": null
+    },
+    "support_rate_delta": 0.053030303030303094,
+    "questions_scored": 11
+  },
+  "status": "partial_quota_blocked",
+  "completed_question_ids": [
+    "s01",
+    "s02",
+    "s03",
+    "s04",
+    "s05",
+    "m01",
+    "m02",
+    "m03",
+    "m04",
+    "m05",
+    "m06"
+  ],
+  "failed_question_ids": [
+    "m07",
+    "m08",
+    "m09",
+    "a01",
+    "a02",
+    "a03",
+    "a04"
+  ],
+  "failure_context": "User-provided terminal log reports token_quota_reached (403), plus a rate_limit_reached_requests (429) response. Saved run errors are provider-sanitized.",
+  "rows": [
+    {
+      "id": "s01",
+      "kind": "single_hop",
+      "should_abstain": false,
+      "elapsed_seconds": 17.95,
+      "revised": false,
+      "without_critique": {
+        "supported": 0,
+        "claims": 0,
+        "rate": null,
+        "abstained": true,
+        "hop_recall": 0.0
+      },
+      "with_critique": {
+        "supported": 0,
+        "claims": 0,
+        "rate": null,
+        "abstained": true,
+        "hop_recall": 0.0
+      }
+    },
+    {
+      "id": "s02",
+      "kind": "single_hop",
+      "should_abstain": false,
+      "elapsed_seconds": 14.62,
+      "revised": true,
+      "without_critique": {
+        "supported": 1,
+        "claims": 2,
+        "rate": 0.5,
+        "abstained": false,
+        "hop_recall": 1.0
+      },
+      "with_critique": {
+        "supported": 1,
+        "claims": 1,
+        "rate": 1.0,
+        "abstained": false,
+        "hop_recall": 1.0
+      }
+    },
+    {
+      "id": "s03",
+      "kind": "single_hop",
+      "should_abstain": false,
+      "elapsed_seconds": 17.49,
+      "revised": false,
+      "without_critique": {
+        "supported": 4,
+        "claims": 4,
+        "rate": 1.0,
+        "abstained": false,
+        "hop_recall": 1.0
+      },
+      "with_critique": {
+        "supported": 4,
+        "claims": 4,
+        "rate": 1.0,
+        "abstained": false,
+        "hop_recall": 1.0
+      }
+    },
+    {
+      "id": "s04",
+      "kind": "single_hop",
+      "should_abstain": false,
+      "elapsed_seconds": 16.49,
+      "revised": false,
+      "without_critique": {
+        "supported": 4,
+        "claims": 4,
+        "rate": 1.0,
+        "abstained": false,
+        "hop_recall": 1.0
+      },
+      "with_critique": {
+        "supported": 4,
+        "claims": 4,
+        "rate": 1.0,
+        "abstained": false,
+        "hop_recall": 1.0
+      }
+    },
+    {
+      "id": "s05",
+      "kind": "single_hop",
+      "should_abstain": false,
+      "elapsed_seconds": 16.58,
+      "revised": false,
+      "without_critique": {
+        "supported": 4,
+        "claims": 4,
+        "rate": 1.0,
+        "abstained": false,
+        "hop_recall": 1.0
+      },
+      "with_critique": {
+        "supported": 4,
+        "claims": 4,
+        "rate": 1.0,
+        "abstained": false,
+        "hop_recall": 1.0
+      }
+    },
+    {
+      "id": "m01",
+      "kind": "multi_hop",
+      "should_abstain": false,
+      "elapsed_seconds": 18.87,
+      "revised": false,
+      "without_critique": {
+        "supported": 3,
+        "claims": 3,
+        "rate": 1.0,
+        "abstained": false,
+        "hop_recall": 1.0
+      },
+      "with_critique": {
+        "supported": 3,
+        "claims": 3,
+        "rate": 1.0,
+        "abstained": false,
+        "hop_recall": 1.0
+      }
+    },
+    {
+      "id": "m02",
+      "kind": "multi_hop",
+      "should_abstain": false,
+      "elapsed_seconds": 15.41,
+      "revised": false,
+      "without_critique": {
+        "supported": 2,
+        "claims": 2,
+        "rate": 1.0,
+        "abstained": false,
+        "hop_recall": 0.5
+      },
+      "with_critique": {
+        "supported": 2,
+        "claims": 2,
+        "rate": 1.0,
+        "abstained": false,
+        "hop_recall": 0.5
+      }
+    },
+    {
+      "id": "m03",
+      "kind": "multi_hop",
+      "should_abstain": false,
+      "elapsed_seconds": 25.42,
+      "revised": false,
+      "without_critique": {
+        "supported": 6,
+        "claims": 6,
+        "rate": 1.0,
+        "abstained": false,
+        "hop_recall": 0.5
+      },
+      "with_critique": {
+        "supported": 6,
+        "claims": 6,
+        "rate": 1.0,
+        "abstained": false,
+        "hop_recall": 0.5
+      }
+    },
+    {
+      "id": "m04",
+      "kind": "multi_hop",
+      "should_abstain": false,
+      "elapsed_seconds": 22.63,
+      "revised": false,
+      "without_critique": {
+        "supported": 5,
+        "claims": 5,
+        "rate": 1.0,
+        "abstained": false,
+        "hop_recall": 1.0
+      },
+      "with_critique": {
+        "supported": 5,
+        "claims": 5,
+        "rate": 1.0,
+        "abstained": false,
+        "hop_recall": 1.0
+      }
+    },
+    {
+      "id": "m05",
+      "kind": "multi_hop",
+      "should_abstain": false,
+      "elapsed_seconds": 21.79,
+      "revised": false,
+      "without_critique": {
+        "supported": 3,
+        "claims": 3,
+        "rate": 1.0,
+        "abstained": false,
+        "hop_recall": 1.0
+      },
+      "with_critique": {
+        "supported": 3,
+        "claims": 3,
+        "rate": 1.0,
+        "abstained": false,
+        "hop_recall": 1.0
+      }
+    },
+    {
+      "id": "m06",
+      "kind": "multi_hop",
+      "should_abstain": false,
+      "elapsed_seconds": 27.78,
+      "revised": true,
+      "without_critique": {
+        "supported": 1,
+        "claims": 3,
+        "rate": 0.3333333333333333,
+        "abstained": false,
+        "hop_recall": 1.0
+      },
+      "with_critique": {
+        "supported": 0,
+        "claims": 1,
+        "rate": 0.0,
+        "abstained": false,
+        "hop_recall": 0.5
+      }
+    }
+  ],
+  "human_review": {
+    "completed": false,
+    "labeled_claims": 0,
+    "review_items": 69
+  },
+  "acceptance": {
+    "run_id": "acceptance-20261005T230751Z",
+    "completed_probes": 0,
+    "attempted_probes": 3,
+    "status": "quota_blocked"
+  },
+  "limitations": [
+    "Only 11 of 18 questions completed; no adversarial questions completed.",
+    "Internal critic judgments are not independent or human-reviewed support labels.",
+    "Observed rate increase accompanies fewer claims and lower paper recall; no demonstrated human-reviewed quality improvement.",
+    "Comparison question used during development; benchmark is not held out.",
+    "Raw excerpts, review IDs, arm mapping, credentials and provider account identifiers are not included in this public summary."
+  ]
+}

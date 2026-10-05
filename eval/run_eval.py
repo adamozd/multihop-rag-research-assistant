@@ -6,6 +6,8 @@ import os
 import platform
 import random
 import uuid
+import subprocess
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -75,12 +77,22 @@ def main():
            "corpus_sha256": hashlib.sha256(manifest.read_bytes()).hexdigest() if manifest.exists() else None,
            "settings": {"max_hops": 2, "top_k": 4, "max_revisions": 1},
            "rows": [], "failures": [], "review_map": {}}
+    run["source_revision"] = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    run["source_sha256"] = {str(p): hashlib.sha256(p.read_bytes()).hexdigest()
+                            for folder in ("eval", "reasoning", "llm", "retrieval", "ingestion")
+                            for p in sorted(Path(folder).glob("*.py"))}
+    run["expected_questions"] = len(questions)
+    run["completed"] = False
+    run["max_new_tokens"] = os.getenv("WATSONX_MAX_NEW_TOKENS", "3000")
+    write_json(output / "questions.json", questions)
     review = []
     for question in questions:
+        started = time.monotonic()
         try:
             result = run_pipeline(AskRequest(question=question["question"]), retriever)
             write_json(output / f"{question['id']}.json", result.model_dump())
-            row = {"id": question["id"], "kind": question["kind"], "should_abstain": question["should_abstain"]}
+            row = {"id": question["id"], "kind": question["kind"], "should_abstain": question["should_abstain"],
+                   "elapsed_seconds": round(time.monotonic() - started, 2), "revised": result.revised}
             for arm, answer, audit in (("without_critique", result.draft, result.critique_log[0]),
                                        ("with_critique", result.final, result.critique_log[-1])):
                 row[arm] = {**support_counts(audit), "abstained": answer.abstained,
@@ -96,9 +108,14 @@ def main():
             run["failures"].append({"id": question["id"], "error": str(exc)})
         run["metrics"] = summarize(run["rows"])
         write_json(output / "run.json", run)
+        checkpoint = list(review)
+        random.Random(42).shuffle(checkpoint)
+        write_json(output / "human-review.json", checkpoint)
         print(f"Completed {question['id']}; failures: {len(run['failures'])}", flush=True)
     random.Random(42).shuffle(review)
     write_json(output / "human-review.json", review)
+    run["completed"] = len(run["rows"]) == len(questions) and not run["failures"]
+    write_json(output / "run.json", run)
     print(f"Results: {output}")
     if run["failures"]:
         raise SystemExit("Evaluation incomplete. Failures are recorded and excluded, not silently scored.")
