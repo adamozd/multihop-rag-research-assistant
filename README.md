@@ -1,6 +1,6 @@
 # Multi-Hop RAG Research Synthesis Assistant
 
-A local research prototype that decomposes a question, retrieves academic evidence over bounded hops, writes cited claims, audits each claim, and revises once when the audit flags a problem.
+This is a local research prototype developed by me that decomposes a question, retrieves academic evidence over bounded hops, writes cited claims, audits each claim, and revises once when the audit flags a problem.
 
 The starter corpus covers **RAG and multi-hop question answering**. The pipeline uses plain Python; embeddings and Chroma stay local. All LLM calls, including JSON repair and revision, pass through `llm_call(prompt: str) -> str` in `llm/watsonx_client.py`.
 
@@ -69,14 +69,14 @@ The shared LLM client uses watsonx's chat endpoint so instruction models receive
 
 ## Evaluation
 
-`eval/eval_questions.json` contains 18 starter questions: 5 single-hop controls, 9 multi-hop comparisons and 4 adversarial/no-answer cases. The first live run uses the frozen snapshot in `eval/benchmarks/v1/questions.json`, with its hash recorded in `manifest.json`. Expected-paper and abstention labels were frozen before inference but are **not independently human-validated**. Reference answers are for reviewers, never supplied to the answering pipeline. This is a development benchmark; the comparison question was used during development.
+`eval/eval_questions.json` contains 18 starter questions: 5 single-hop controls, 9 multi-hop comparisons and 4 adversarial/no-answer cases. The first live run that I tested uses the frozen snapshot in `eval/benchmarks/v1/questions.json`, with its hash recorded in `manifest.json`. Expected-paper and abstention labels were frozen before inference but are **not independently human-validated**. Reference answers are for reviewers, never supplied to the answering pipeline. This is a development benchmark; the comparison question was used during development.
 
 ```bash
 HF_HUB_OFFLINE=1 python -m eval.run_eval --questions eval/benchmarks/v1/questions.json
 HF_HUB_OFFLINE=1 python -m eval.run_acceptance
 ```
 
-These commands consume watsonx quota. **The current runner has no resume support**: invoking it again starts a new run. Preserve existing results and add verified resume support before retrying the failed questions. See [human-review instructions](eval/HUMAN_REVIEW.md).
+Be careful that these commands consume watsonx quota. **The current runner has no resume support**: invoking it again starts a new run. Preserve existing results and add verified resume support before retrying the failed questions. See [human-review instructions](eval/HUMAN_REVIEW.md).
 
 Each question runs once with critique enabled. Its exact original draft is the “without critique” arm and its final answer is the “with critique” arm. Both arms therefore share the same retrieval, draft and evidence. This isolates the revision loop from retrieval and sampling changes. It does not measure an independent retrieve-once baseline.
 
@@ -142,11 +142,9 @@ The separate acceptance run `acceptance-20261005T230751Z` completed **0/3 probes
 
 Across the 11 completed benchmark questions, the **internal critic proxy** changed from 33/36 supported claims (91.67%) to 32/33 (96.97%). Mean expected-paper recall across the six completed multi-hop cases fell from 83.33% to 75.00%; the answerable response rate was 10/11 in both arms. No-answer abstention was not measured. Two questions triggered revision. Fewer claims and lower paper recall mean the higher proxy rate must not be presented as proven answer-quality improvement.
 
-**Human-reviewed claim support has not been measured:** all 69 draft/final review items remain unlabeled. The full benchmark and semantic acceptance remain incomplete. [Sanitized results and limitations](eval/reports/README.md) are committed separately from ignored raw `eval/results/` files.
+**Human-reviewed claim support has not yet been measured:** all 69 draft/final review items remain unlabeled. The full benchmark and semantic acceptance remain incomplete. [Sanitized results and limitations](eval/reports/README.md) are committed separately from ignored raw `eval/results/` files.
 
-Next: add quota-aware stopping and reproducible resume support; obtain available watsonx quota; complete the seven failed questions and three acceptance probes; obtain human labels and report the full results, including failures. Preserve the frozen baseline and record any resumed execution or configuration changes. See [ROADMAP.md](ROADMAP.md).
-
-## Primary references used for implementation
+## Primary references that I used for implementation
 
 - [IBM ModelInference SDK](https://ibm.github.io/watsonx-ai-python-sdk/v1.4.11/fm_model_inference.html) and [supported model catalog](https://dataplatform.cloud.ibm.com/docs/content/wsj/analyze-data/fm-models.html?context=wx&locale=en)
 - [BGE-small-en-v1.5 model card](https://huggingface.co/BAAI/bge-small-en-v1.5): local normalized embeddings and retrieval query instruction
