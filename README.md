@@ -15,7 +15,7 @@ pip install -r requirements-dev.txt
 cp .env.example .env
 ```
 
-Set `WATSONX_APIKEY`, `WATSONX_PROJECT_ID`, `WATSONX_URL`, and `WATSONX_MODEL_ID` in your local `.env`. Never commit credentials. The example model ID is `ibm/granite-3-3-8b-instruct`, listed in IBM's catalog; availability depends on the region and account. Validate the actual configuration before inference:
+Set `WATSONX_APIKEY`, `WATSONX_PROJECT_ID`, `WATSONX_URL`, and `WATSONX_MODEL_ID` in your local `.env`. Never commit credentials. The example uses Toronto and `meta-llama/llama-3-3-70b-instruct`, confirmed in this project's regional catalog. Choose an instruction model that supports watsonx's chat API; availability depends on the region and account. The originally proposed Granite 3.3 model is unavailable in this setup. Validate the actual configuration before inference:
 
 ```bash
 python -m llm.watsonx_client
@@ -30,6 +30,8 @@ streamlit run frontend/app.py --server.address 127.0.0.1
 ```
 
 Open Streamlit at `http://127.0.0.1:8501`; API documentation is at `http://127.0.0.1:8000/docs`. These are local development services, without authentication or production deployment configuration.
+
+For VS Code, open this repository's root folder and install the recommended Python and Python Debugger extensions. In **Run and Debug**, select **Research Assistant: Full app** and press **F5**. The included launch configurations explicitly use `.venv` for Python, load `.env`, and run from the project root. You can also select **Research Assistant: Validate watsonx** to check provider access. Restart both processes after editing `.env`; the model client is cached. Running `api/main.py` or `frontend/app.py` directly with the editor's generic “Run Python File” button does not start the required Uvicorn/Streamlit servers.
 
 Ingestion downloads the 15 curated papers in `ingestion/corpus.json` using the arXiv API and downloads the BGE model on first use. PDFs, model files, metadata and the persistent index are stored under ignored `data/`. Re-running ingestion reuses versioned PDFs and replaces stale chunks for each paper. Do not run indexing concurrently with evaluation. To use a different corpus:
 
@@ -62,6 +64,8 @@ curl http://127.0.0.1:8000/ask \
 All structured model outputs receive at most **one repair attempt**, including schema errors. On a JSON parse error, the repair prompt includes the required text: “your last response was not valid JSON — return only the JSON object”. A second failure aborts the request with an explicit error. Provider failures are surfaced, never replaced by simulated research answers.
 
 The section-aware chunker detects common and numbered headings, packs paragraphs within sections, and only splits oversized text to a 480-token budget using BGE's tokenizer. It preserves section and page provenance and avoids combining sections. Heading detection is heuristic; complex two-column layouts, tables, scanned PDFs and unusual headings require manual inspection. OCR is not implemented. Retrieved material is explicitly treated as untrusted data in reasoning prompts.
+
+The shared LLM client uses watsonx's chat endpoint so instruction models receive their conversation formatting. All current reasoning calls expect JSON, so the client requests `response_format={"type": "json_object"}` and supplies a JSON-only system instruction. JSON mode does not guarantee schema correctness: strict validation and the single repair attempt remain mandatory. `WATSONX_MAX_NEW_TOKENS` maps to the chat parameter `max_tokens`; temperature is zero. Empty responses report a sanitized finish reason. Structured-output failures name the expected schema and report syntax positions or field/type errors without logging raw model responses. Catalog validation does not test generation: after changing models or client code, restart the backend and submit a real question.
 
 ## Evaluation
 
@@ -113,7 +117,9 @@ Tests exercise JSON/schema repair, the shared provider boundary, bounded hops an
 
 Live synthesis and model validation require your configured watsonx project. The SDK validates the model in that region; no silent fallback is used. Request state is isolated; calls on the shared SDK session are serialized. This prototype is optimized for a local research workflow rather than multi-user throughput.
 
-Initial local verification: 30 tests pass; 15 papers are indexed into 780 chunks with a maximum of 480 BGE tokens each. Real BGE retrieval smoke checks found the expected paper for four of five query variants. The short query “HotpotQA supporting facts dataset” retrieved papers discussing that dataset instead of the original paper in its top four. This query sensitivity is a known tuning target, not a measured benchmark result. Local details are saved in `data/validation.json`. Live watsonx inference and the 18-question benchmark have not been run because credentials are not configured.
+Local verification: 46 tests pass; 15 papers are indexed into 780 chunks with a maximum of 480 BGE tokens each. Initial BGE retrieval smoke checks found the expected paper for four of five query variants. The short query “HotpotQA supporting facts dataset” retrieved papers discussing that dataset instead of the original paper in its top four. This query sensitivity is a known tuning target, not a measured benchmark result. The earlier smoke-check snapshot is saved locally in `data/validation.json`.
+
+A user-run live IRCoT/Self-RAG comparison completed retrieval, synthesis and critique using the Toronto configuration. Both claims were accepted without revision, but manual review found that the answer blurred an optional retrieval threshold into a mandatory step. PDF reading-order issues and unnecessary expansion of subquestions also remain. The full 18-question benchmark has not been run, and no improvement in claim support is claimed. See [ROADMAP.md](ROADMAP.md) for the prioritized next steps and acceptance criteria.
 
 ## Primary references used for implementation
 
