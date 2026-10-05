@@ -9,6 +9,11 @@ def synthesize(question: str, evidence: list[Evidence], draft: Answer | None = N
     prompt = RULES + """\nAnswer using atomic, individually verifiable claims, each with chunk citation_ids.
 Every factual statement including contradictions must be a cited claim. Explicitly describe conflicting
 findings as separate cited claims; avoid unsupported cross-paper numerical comparisons.
+Preserve qualifiers: optional versus required, alternatives versus combined steps, inference versus
+training, and dataset-specific versus general results. Never turn "may", "alternatively", or an
+experimental setting into a universal rule. Split separately checkable assertions into separate claims.
+For example, evidence that a method predicts a retrieval token OR optionally applies a probability
+threshold does not support claiming that both are always required. Describe these as alternative policies.
 Use stable unique claim_ids. Limitations may describe ONLY missing evidence or scope, not new facts.
 If no answer is supported, return claims=[], abstained=true and explain the missing evidence in limitations.
 For partial answers, retain supported claims and identify unanswered parts in limitations.\nQuestion: """

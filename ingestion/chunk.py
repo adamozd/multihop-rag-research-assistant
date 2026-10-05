@@ -4,12 +4,7 @@ import re
 
 from reasoning.models import Evidence
 
-HEADER = re.compile(
-    r"^(?:(?:\d+(?:\.\d+)*\.?|[IVX]+\.)\s+[A-Za-z].{1,84}|"
-    r"(?:abstract|introduction|background|related work|method(?:s|ology)?|approach|"
-    r"experiments?(?: and results)?|results?(?: and discussion)?|discussion|conclusions?|"
-    r"limitations|references|acknowledg(?:e)?ments|appendix)\s*[:.]?)$", re.I
-)
+from ingestion.headings import is_heading
 
 
 def sections(pages: list[tuple[int, str]]) -> list[tuple[str, list[tuple[int, str]]]]:
@@ -19,7 +14,7 @@ def sections(pages: list[tuple[int, str]]) -> list[tuple[str, list[tuple[int, st
         paragraph = []
         for line in text.splitlines() + [""]:
             line = line.strip()
-            heading = bool(line and len(line) <= 90 and HEADER.fullmatch(line))
+            heading = line in text.headings if hasattr(text, "headings") else is_heading(line)
             if not line or heading:
                 if paragraph:
                     blocks.append((page, " ".join(paragraph)))

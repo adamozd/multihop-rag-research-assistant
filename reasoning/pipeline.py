@@ -1,3 +1,4 @@
+import re
 from reasoning.critic import critique
 from reasoning.decomposer import decompose
 from reasoning.hop_controller import decide
@@ -5,6 +6,10 @@ from reasoning.models import AskRequest, Result, render_answer
 from reasoning.synthesizer import synthesize
 
 MAX_EVIDENCE = 24
+
+
+def _query_key(query: str) -> str:
+    return " ".join(re.findall(r"\w+", query.casefold()))
 
 
 def run_pipeline(request: AskRequest, retriever=None) -> Result:
@@ -33,12 +38,19 @@ def run_pipeline(request: AskRequest, retriever=None) -> Result:
         hop_log.append({"hop": hop, "queries": next_queries, "added_chunk_ids": added,
                         "decision": decision.model_dump()})
         if decision.sufficient:
+            hop_log[-1]["stop_reason"] = "sufficient"
+            break
+        if hop > 1 and not added:
+            hop_log[-1]["stop_reason"] = "no_new_evidence"
+            warnings.append(f"Retrieval found no new evidence. Unresolved: {decision.missing_fact}")
             break
         if hop == request.max_hops:
-            warnings.append("Retrieval hop limit reached; evidence may be incomplete.")
+            hop_log[-1]["stop_reason"] = "hop_limit"
+            warnings.append(f"Retrieval hop limit reached. Unresolved: {decision.missing_fact}")
             break
-        if decision.query.casefold().strip() in {q.casefold().strip() for q in queries}:
-            warnings.append("Hop controller repeated a query; retrieval stopped.")
+        if _query_key(decision.query) in {_query_key(q) for q in queries}:
+            hop_log[-1]["stop_reason"] = "repeated_query"
+            warnings.append(f"Hop controller repeated a query; retrieval stopped. Unresolved: {decision.missing_fact}")
             break
         next_queries = [decision.query]
     evidence_list = list(evidence.values())

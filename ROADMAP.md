@@ -1,34 +1,28 @@
 # Next steps
 
-Checkpoint: 2026-10-05. Development is paused after the first successful live answer.
+Checkpoint: 2026-10-05. Steps 1–3 are implemented locally; model-quality acceptance still needs a live run and human review.
 
-## Current baseline
+## 1. Evidence extraction — implemented, locally verified
 
-- Local Streamlit interface and FastAPI backend; 15 papers indexed into 780 chunks.
-- watsonx in Toronto using Llama 3.3 70B Instruct, with chat JSON mode and one schema/parse repair attempt.
-- A user-run result for the IRCoT/Self-RAG comparison completed decomposition, two retrieval hops, synthesis and critique.
-- The result contained two claims, valid citations to both expected papers, and no revision because the critic accepted both claims.
-- Manual review found an imprecise claim the critic missed: Self-RAG's optional threshold policy was described as though it necessarily accompanied the retrieval-token decision.
-- Some PDF excerpts interleave columns or misclassify table rows as section headings. Decomposition introduced an efficiency trade-off beyond the question, contributing to an unnecessary evidence-insufficiency warning.
-- No benchmark improvement has been demonstrated. A successful run is evidence of integration, not proof of answer quality or revision effectiveness.
+PDF extraction now orders paragraph blocks by column, uses spanning blocks as reading boundaries, removes repeated margin text, and verifies section labels using layout/font information. Numeric table rows stay in the evidence rather than becoming section titles. Page and paper provenance and the 480-token cap are retained. The 15-paper local corpus has been rebuilt into 695 chunks, all at or below 480 BGE tokens.
 
-## 1. Fix evidence extraction
+Representative IRCoT and Self-RAG passages were compared with rendered PDF pages. Regression tests cover shuffled two-column objects, full-width titles, single-column text, wrapped headings, table rows and repeated headers. Complex tables, equations, unusual layouts and scanned PDFs remain limitations; this is not a general document-layout engine.
 
-Improve reading order for multi-column PDFs and heading detection while preserving paper, section and page provenance. Re-index the existing corpus after changes.
+## 2. Focused retrieval — implemented, live acceptance pending
 
-Acceptance: manually compare representative IRCoT and Self-RAG passages with their PDF pages; ensure columns are not interleaved and table rows are not headings. Add regression fixtures for those layouts and retain the token cap.
+Decomposition prompts restrict questions to the requested facet. The controller must name a concrete missing fact before another search, and ignore decomposition scope creep. Repeated queries and hops with no new evidence stop retrieval; the trace records the stop reason and any unresolved fact.
 
-## 2. Keep retrieval focused on the user's question
+Acceptance still to verify with the configured model: the IRCoT/Self-RAG timing comparison does not invent an efficiency requirement and stops when both requested mechanisms are supported. Prompt instructions alone do not guarantee this behavior.
 
-Restrict decomposition to necessary subquestions. Have the controller identify a concrete missing fact and target it, rather than broadening the research scope or repeating the original question.
+## 3. Synthesis and claim auditing — implemented, live acceptance pending
 
-Acceptance: the retrieval-timing comparison does not invent an accuracy/efficiency requirement. It stops when the requested mechanisms are supported and accurately reports any remaining gap.
+Synthesis and critic instructions now explicitly distinguish optional from mandatory behavior, alternative policies from combined steps, training from inference, and dataset-specific results from general claims. The critic must explain decisive evidence wording. Revision remains capped at one, with unresolved flags visible.
 
-## 3. Improve synthesis and claim auditing
+An offline regression verifies the pipeline's correction flow for an overstated retrieval policy using scripted model outputs. This does **not** demonstrate that the live model detects the error. Next: rerun the comparison, manually check the optional Self-RAG threshold, exercise a real revision, and try a no-answer question.
 
-Preserve qualifiers such as optional versus mandatory, alternatives versus combined steps, and dataset-specific versus general results. Strengthen the critic with focused regression cases, including the missed Self-RAG distinction. Keep the one-revision cap and expose unresolved problems.
+## UI — initial cleanup implemented
 
-Acceptance: human review confirms that deliberately overstated claims are flagged and corrected or removed. Verify the revision path in a live run as well as with mocked tests. Add a no-answer case to check abstention.
+A restrained Streamlit theme, sidebar search settings, numbered paper citations, expandable excerpts, and separate Answer / Sources / Review / Retrieval tabs replace the dense output. Drafts, unresolved warnings, stop reasons and JSON export remain available. Offline Streamlit tests cover success, abstention, errors and the user's saved result; browser visual review is still pending.
 
 ## 4. Establish a defensible evaluation baseline
 
@@ -40,6 +34,4 @@ Acceptance: a complete, reproducible report with human-reviewed labels and limit
 
 ## 5. Expand scope after quality is established
 
-Add PDF uploads and isolated document collections, then topic-based paper discovery with user review of the selected papers. Plan a public beta only after reliability and usage costs are understood; include accounts or access controls, usage limits, private collection isolation and deployment monitoring.
-
-The next development session should start with step 1. These are planned changes, not implemented features.
+Add PDF uploads and isolated document collections, then topic-based paper discovery with user review of selected papers. Plan a public beta after reliability and usage costs are understood; include access controls, usage limits, private collection isolation and deployment monitoring.

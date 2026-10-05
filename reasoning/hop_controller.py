@@ -5,8 +5,15 @@ from reasoning.prompts import RULES, context
 
 
 def decide(question: str, subquestions: list[str], evidence: list[Evidence], queries: list[str]) -> HopDecision:
-    return json_call(RULES + "\nAssess whether every subquestion has sufficient evidence. "
-                     "If not, propose one NEW targeted query addressing the most important missing link. "
-                     "If sufficient, query must be null. Do not equate similar vocabulary with support.\n"
-                     + json.dumps({"question": question, "subquestions": subquestions, "queries_already_used": queries})
+    prompt = RULES + """
+Judge sufficiency for the ORIGINAL user question, using subquestions only as retrieval aids.
+Ignore any subquestion that expands beyond the requested scope. If insufficient, missing_fact must name
+one specific unanswered fact necessary for the original question; propose one NEW query naming the
+method and that fact. Explain in reason what existing evidence establishes and what is absent.
+Do not request generic additional context, tradeoffs, performance, or exhaustive details unless asked.
+Stop as soon as the requested facets are evidenced, even if unrelated details are absent.
+If sufficient, query and missing_fact must both be null. Do not equate similar vocabulary with support.
+"""
+    return json_call(prompt + json.dumps({"question": question, "subquestions": subquestions,
+                                         "queries_already_used": queries})
                      + "\nEvidence:\n" + context(evidence), HopDecision)

@@ -33,11 +33,16 @@ class HopDecision(StrictModel):
     sufficient: bool
     reason: str = Field(min_length=1)
     query: str | None
+    missing_fact: str | None
 
     @model_validator(mode="after")
     def targeted_query(self):
         if not self.sufficient and (not self.query or not self.query.strip()):
             raise ValueError("Insufficient evidence requires a targeted query")
+        if self.sufficient and (self.query is not None or self.missing_fact is not None):
+            raise ValueError("Sufficient evidence requires null query and missing_fact")
+        if not self.sufficient and not (self.missing_fact and self.missing_fact.strip()):
+            raise ValueError("Another hop requires a concrete missing fact")
         return self
 
 

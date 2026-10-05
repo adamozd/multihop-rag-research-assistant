@@ -117,9 +117,21 @@ Tests exercise JSON/schema repair, the shared provider boundary, bounded hops an
 
 Live synthesis and model validation require your configured watsonx project. The SDK validates the model in that region; no silent fallback is used. Request state is isolated; calls on the shared SDK session are serialized. This prototype is optimized for a local research workflow rather than multi-user throughput.
 
-Local verification: 46 tests pass; 15 papers are indexed into 780 chunks with a maximum of 480 BGE tokens each. Initial BGE retrieval smoke checks found the expected paper for four of five query variants. The short query “HotpotQA supporting facts dataset” retrieved papers discussing that dataset instead of the original paper in its top four. This query sensitivity is a known tuning target, not a measured benchmark result. The earlier smoke-check snapshot is saved locally in `data/validation.json`.
+Local verification: 54 offline tests pass. PDF regression cases cover shuffled two-column content, single-column text, wrapped headings, numeric table rows, repeated margins and appendices following references. Streamlit tests also render the user's saved research result, numbered sources, review states and connection errors. A browser visual review has not yet been performed.
 
-A user-run live IRCoT/Self-RAG comparison completed retrieval, synthesis and critique using the Toronto configuration. Both claims were accepted without revision, but manual review found that the answer blurred an optional retrieval threshold into a mandatory step. PDF reading-order issues and unnecessary expansion of subquestions also remain. The full 18-question benchmark has not been run, and no improvement in claim support is claimed. See [ROADMAP.md](ROADMAP.md) for the prioritized next steps and acceptance criteria.
+The current extraction uses paragraph blocks and inferred column boundaries rather than line-by-line coordinate sorting. Heading detection uses font/layout information; repeated margin text is removed. It remains heuristic: complex tables, equations, unusual layouts and scanned PDFs require manual review. The local 15-paper corpus has been rebuilt into 695 chunks (maximum 480 BGE tokens); `data/qa/verification.json` records chunk counts, the 480-token check and focused retrieval smoke checks. Both focused smoke queries retrieved their expected paper in the top four; this measures paper presence, not complete evidence coverage. Older exports keep their old evidence IDs; rerun questions to inspect the new evidence.
+
+Decomposition now restricts itself to the requested facet. Every insufficient hop decision must provide a concrete `missing_fact`; sufficient decisions require null query and missing fact. Repeated queries and hops without new evidence stop with an explicit reason in the trace. Synthesis and critique explicitly check qualifiers and alternatives, including the optional Self-RAG threshold distinction missed in the first live result. All calls still use the shared watsonx client and one JSON/schema repair attempt.
+
+To inspect the refreshed interface, restart the API and Streamlit using the startup commands above (or the VS Code Full app configuration). Search settings are in the sidebar. Results have Answer, Sources, Review and Retrieval tabs; numbered paper citations map to source excerpts, while the downloaded JSON preserves the original evidence IDs.
+
+Next live acceptance checks:
+
+1. Ask “How do IRCoT and Self-RAG decide when to retrieve evidence?” Verify that the subquestions stay on retrieval timing and the answer presents Self-RAG's threshold as an optional alternative.
+2. Inspect the cited excerpts and retrieval trace. An extra hop must target a specific missing fact, not an unrequested efficiency comparison.
+3. Review a claim requiring correction and a no-answer question. Confirm that revision corrects or removes unsupported claims, and that unresolved flags remain visible after the one-revision cap.
+
+The new prompts have not yet been tested against live watsonx. Scripted model tests verify control flow, not semantic model reliability. The full 18-question benchmark has not been run, and no improvement in claim support is claimed. See [ROADMAP.md](ROADMAP.md) for implementation status and remaining acceptance criteria.
 
 ## Primary references used for implementation
 
