@@ -27,6 +27,6 @@ def test_api_full_response(monkeypatch, scripted_llm, evidence):
                   {"sufficient": True, "reason": "Enough", "query": None, "missing_fact": None},
                   {"claims": [], "abstained": True, "limitations": ["Missing relevant evidence"]}])
     monkeypatch.setattr(main, "run_pipeline", lambda request: run_pipeline(request, Retriever()))
-    response = TestClient(main.app).post("/ask", json={"question": "valid question"})
+    response = TestClient(main.app).post("/ask", json={"question": "valid question", "mode": "baseline"})
     assert response.status_code == 200
     assert response.json()["final"]["abstained"]

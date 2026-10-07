@@ -1,6 +1,6 @@
 # Multi-Hop RAG Research Synthesis Assistant
 
-This is a local research prototype developed by me that decomposes a question, retrieves academic evidence over bounded hops, writes cited claims, audits each claim, and revises once when the audit flags a problem.
+This is a local research prototype developed by me that searches academic papers, writes cited claims, and checks them against the evidence. The default flow combines drafting with evidence assessment, then reviews and corrects the answer in one more call. The original multi-step research flow remains available for evaluation.
 
 The starter corpus covers **RAG and multi-hop question answering**. The pipeline uses plain Python; embeddings and Chroma stay local. All LLM calls, including JSON repair and revision, pass through `llm_call(prompt: str) -> str` in `llm/watsonx_client.py`.
 
@@ -43,15 +43,59 @@ Use a **new `CHROMA_COLLECTION`** when switching corpora; existing papers are ot
 
 After the initial model download, set `HF_HUB_OFFLINE=1` to prevent Hugging Face metadata requests. To rebuild the index after changing chunking without refetching papers: `HF_HUB_OFFLINE=1 python -m ingestion.fetch_papers --reindex-local`.
 
+## Your papers and evidence explorer
+
+In the Streamlit sidebar, open **Manage papers**, enter a collection name, and select **Create collection**. The new collection is selected automatically. Upload one or more PDFs and choose **Index PDFs**. Once indexing finishes, ask a question: retrieval searches only the selected collection. Switching collections clears the previous answer to avoid mixing sources.
+
+Uploads support text-based PDFs up to **20 MB and 200 pages each**. Password-protected and image-only PDFs are rejected; OCR is not included. Re-uploading identical bytes to the same collection does not duplicate the paper. Uploads are stored locally and embedded with BGE; indexing does not call watsonx. Asking questions still sends retrieved text to your configured watsonx model and requires available quota. English papers are the intended fit for the current embedding model.
+
+The existing **RAG & multi-hop QA** corpus remains the default and is read-only through the upload interface. Custom collections have separate Chroma indexes. Their catalog and PDFs live under ignored `data/library/` (override with `LIBRARY_PATH`); vectors remain under `CHROMA_PATH`. This is local collection separation, not account-based access control. Keep the unauthenticated API bound to localhost.
+
+In **Answer**, expand **Explore evidence** for a claim to see each exact cited excerpt, title, section and PDF page numbers. Select **Show source page** to view the original PDF page and its extracted text, including surrounding context. You can change the page number to inspect adjacent pages. This extra context is for your review; it is not automatically added to the saved answer's evidence or sent to the model. Missing citations or unavailable source PDFs are shown explicitly. The same page viewer is available under **Sources**.
+
+Collection/source endpoints:
+
+- `GET /collections` and `POST /collections` with `{"name":"My research"}`.
+- `GET /collections/{id}/papers` lists indexed papers.
+- `POST /collections/{id}/papers?filename=paper.pdf` accepts raw PDF bytes (`Content-Type: application/pdf`).
+- `GET /collections/{id}/papers/{paper_id}/pdf` serves the stored original.
+- `GET /collections/{id}/papers/{paper_id}/pages/{page}` returns page text; append `/image` for a rendered PNG.
+- `POST /ask` accepts an optional `collection_id`; it defaults to `"default"` for existing clients and evaluation scripts. Results record the collection ID.
+
+Restart both the API and Streamlit after updating. No additional dependencies are needed. Live stage-by-stage progress is a later change; current indexing and synthesis use ordinary spinners.
+
 ## Request and output
 
 ```bash
 curl http://127.0.0.1:8000/ask \
   -H 'Content-Type: application/json' \
-  -d '{"question":"How do IRCoT and Self-RAG decide when to retrieve evidence?","critique":true,"max_hops":2,"top_k":4}'
+  -d '{"question":"How do IRCoT and Self-RAG decide when to retrieve evidence?","mode":"efficient","critique":true,"max_hops":2,"top_k":4}'
 ```
 
 `POST /ask` returns structured draft and final claims, rendered answers, source excerpts with paper/section/PDF-page provenance, retrieval decisions, critique verdicts, and warnings. The Streamlit interface exposes the draft, final answer, citations and collapsible traces. `critique=false` returns the unaudited draft for interactive comparison.
+
+### Efficient mode (default)
+
+1. Search the selected collection locally using the original question.
+2. In one model call, draft cited claims and identify any essential missing evidence.
+3. If needed, make one targeted local search. Only new usable evidence triggers another drafting call.
+4. In one model call, audit the draft and correct or remove flagged claims. Supported claims are kept unchanged; new claim IDs and unresolved citations are excluded.
+
+Normally this uses **2 model calls**, or **3 with a useful follow-up**, before JSON repairs. An abstention needs no review call. The review log evaluates the draft; the corrected final answer is **not independently re-audited**. This cost/quality trade-off has been tested with mocked responses, not yet with live watsonx. No measured token savings or equal-quality claim is made.
+
+Efficient mode sends at most **4 complete chunks / 8,000 evidence-text characters** at a time. It skips oversized chunks instead of shortening them into potentially misleading snippets. Selection still depends on vector ranking; narrower context may miss useful evidence. `top_k` is capped at 4 and `max_hops` at 2 in this mode.
+
+Per request, the shared client permits at most **6 inference attempts including JSON repairs**, at most **32,000 characters per user prompt including schema/repair text**, and at most **1,800 output tokens per call** (or your lower `WATSONX_MAX_NEW_TOKENS`). These are call/context/output limits, not a guaranteed monetary or total-token budget. Too-short outputs can still fail JSON validation.
+
+Identical efficient requests reuse successful results for one hour, with up to 32 entries in process memory. Cache keys include the question, collection, request settings, indexed text/metadata fingerprint, model, region, project and output setting. Restarting the API clears the cache. Use `use_cache=false` to bypass it; baseline requests always bypass it. Do not index concurrently with synthesis or evaluation.
+
+The UI and result JSON show actual provider-reported input/output tokens and inference attempts, including repairs. Cache hits show zero new usage. If a response omits usage or a call fails without counts, totals are marked unavailable. The local, ignored `data/usage.jsonl` ledger also records failed requests; it contains counts and statuses, never questions, excerpts, credentials or raw responses. Override its path with `LLM_USAGE_LOG`. These totals are application records, not a replacement for IBM's account-wide usage report.
+
+SDK retries are disabled. On `token_quota_reached`, the client blocks further inference for the life of that process. Restore quota before restarting the API. A restart only clears the local block; it does not restore the provider allowance. Benchmark and acceptance runners stop immediately on quota exhaustion and mark remaining work as unattempted.
+
+### Research baseline
+
+Select **Research baseline** in the sidebar or send `mode=baseline`. This preserves the original reasoning sequence and up-to-24-chunk context for comparisons. It uses the configured output limit and has a 16-attempt safety ceiling, including repairs. Both evaluation runners explicitly select this mode with caching disabled.
 
 1. Decompose into 2–4 atomic questions.
 2. Retrieve top-k chunks for each subquestion. This initial batch counts as **hop 1**.
@@ -120,7 +164,7 @@ Tests exercise JSON/schema repair, the shared provider boundary, bounded hops an
 
 Live synthesis and model validation require your configured watsonx project. The SDK validates the model in that region; no silent fallback is used. Request state is isolated; calls on the shared SDK session are serialized. This prototype is optimized for a local research workflow rather than multi-user throughput.
 
-Local verification: 54 offline tests pass. PDF regression cases cover shuffled two-column content, single-column text, wrapped headings, numeric table rows, repeated margins and appendices following references. Streamlit tests also render the user's saved research result, numbered sources, review states and connection errors. A browser visual review has not yet been performed.
+Local verification: **77 offline tests pass**, covering request limits, token accounting, caching, quota fail-fast, both reasoning flows, PDF upload validation, duplicate handling, collection isolation, failed-index cleanup, empty-collection quota protection, and evidence-page UI behavior. PDF regression cases cover shuffled two-column content, single-column text, wrapped headings, numeric table rows, repeated margins and appendices following references. Streamlit tests also render the user's saved research result, numbered sources, review states and connection errors. The collection controls and claim-to-PDF explorer were checked in the browser using isolated local storage and a saved answer. A real 22-page upload produced 50 searchable passages and a verified page preview without watsonx calls.
 
 The current extraction uses paragraph blocks and inferred column boundaries rather than line-by-line coordinate sorting. Heading detection uses font/layout information; repeated margin text is removed. It remains heuristic: complex tables, equations, unusual layouts and scanned PDFs require manual review. The local 15-paper corpus has been rebuilt into 695 chunks (maximum 480 BGE tokens); `data/qa/verification.json` records chunk counts, the 480-token check and focused retrieval smoke checks. Both focused smoke queries retrieved their expected paper in the top four; this measures paper presence, not complete evidence coverage. Older exports keep their old evidence IDs; rerun questions to inspect the new evidence.
 
@@ -142,7 +186,7 @@ The separate acceptance run `acceptance-20261005T230751Z` completed **0/3 probes
 
 Across the 11 completed benchmark questions, the **internal critic proxy** changed from 33/36 supported claims (91.67%) to 32/33 (96.97%). Mean expected-paper recall across the six completed multi-hop cases fell from 83.33% to 75.00%; the answerable response rate was 10/11 in both arms. No-answer abstention was not measured. Two questions triggered revision. Fewer claims and lower paper recall mean the higher proxy rate must not be presented as proven answer-quality improvement.
 
-**Human-reviewed claim support has not yet been measured:** all 69 draft/final review items remain unlabeled. The full benchmark and semantic acceptance remain incomplete. [Sanitized results and limitations](eval/reports/README.md) are committed separately from ignored raw `eval/results/` files.
+**Independent human-reviewed claim support has not been established.** The saved labels were completed and submitted by the author after AI assistance; they must not be presented as an independent human evaluation. The full benchmark and semantic acceptance remain incomplete. [Sanitized results and limitations](eval/reports/README.md) are committed separately from ignored raw `eval/results/` files.
 
 ## Primary references that I used for implementation
 

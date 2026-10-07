@@ -4,13 +4,23 @@ from functools import lru_cache
 from threading import Lock
 
 from dotenv import load_dotenv
+from llm.usage import current_usage
 
 
 class LLMError(RuntimeError):
     pass
 
 
+class QuotaExceeded(LLMError):
+    pass
+
+
+class BudgetExceeded(LLMError):
+    pass
+
+
 _lock = Lock()
+_quota_exhausted = False
 
 
 @lru_cache(maxsize=1)
@@ -28,7 +38,7 @@ def _model():
         credentials=Credentials(api_key=os.environ["WATSONX_APIKEY"], url=os.environ["WATSONX_URL"]),
         project_id=os.environ["WATSONX_PROJECT_ID"],
         validate=True,
-        max_retries=2,
+        max_retries=0,
     )
 
 
@@ -53,13 +63,22 @@ def _chat_text(response: dict) -> str:
 
 def llm_call(prompt: str) -> str:
     """Generate text; all reasoning calls, including JSON repairs, pass here."""
+    global _quota_exhausted
+    record = None
     try:
         # Shared SDK sessions are serialized; request pipeline state stays local.
         with _lock:
+            if _quota_exhausted:
+                raise QuotaExceeded("watsonx token quota is exhausted. No further calls will be sent until the server restarts. Restore quota before restarting.")
             model = _model()
             max_tokens = int(os.getenv("WATSONX_MAX_NEW_TOKENS", "3000"))
             if max_tokens < 1:
                 raise LLMError("WATSONX_MAX_NEW_TOKENS must be a positive integer.")
+            usage = current_usage.get()
+            if usage is not None:
+                if usage.max_output_tokens is not None:
+                    max_tokens = min(max_tokens, usage.max_output_tokens)
+                record = usage.reserve(prompt, max_tokens)
             # Chat applies the selected model's conversation template.
             response = model.chat(
                 messages=[
@@ -69,10 +88,31 @@ def llm_call(prompt: str) -> str:
                 params={"temperature": 0, "max_tokens": max_tokens,
                         "response_format": {"type": "json_object"}},
             )
-        return _chat_text(response)
+            if record is not None:
+                reported = response.get("usage", {}) if isinstance(response, dict) else {}
+                if not isinstance(reported, dict):
+                    reported = {}
+                for key in ("prompt_tokens", "completion_tokens"):
+                    value = reported.get(key)
+                    if type(value) is int and value >= 0:
+                        record[key] = value
+                record["status"] = "received"
+        text = _chat_text(response)
+        if record is not None:
+            record["status"] = "success"
+        return text
     except LLMError:
+        if record is not None:
+            record["status"] = "invalid_response"
         raise
     except Exception as exc:
+        # Inspect privately; raw SDK payloads can include account identifiers.
+        quota = "token_quota_reached" in str(exc) or "Token consumption quota has been reached" in str(exc)
+        if record is not None:
+            record["status"] = "quota_exhausted" if quota else "provider_error"
+        if quota:
+            _quota_exhausted = True
+            raise QuotaExceeded("watsonx token quota is exhausted. Restore quota before restarting the server; further calls are blocked.") from exc
         raise LLMError("watsonx inference failed. Check credentials, region and model availability.") from exc
 
 

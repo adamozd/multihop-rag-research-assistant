@@ -45,7 +45,7 @@ def test_schema_repair(scripted_llm):
 
 def test_shared_client_full_revision_flow(scripted_llm, evidence):
     prompts = scripted_llm([DECOMPOSE, DONE, DRAFT, audit("unsupported"), DRAFT, audit()])
-    result = run_pipeline(AskRequest(question="How does this work?"), FakeRetriever(evidence))
+    result = run_pipeline(AskRequest(mode="baseline", question="How does this work?"), FakeRetriever(evidence))
     assert result.revised and len(result.critique_log) == 2
     assert len(prompts) == 6  # Every component and revision used the one patched llm_call.
     assert len(result.evidence) == 1  # Dedup across subquestions.
@@ -54,20 +54,20 @@ def test_shared_client_full_revision_flow(scripted_llm, evidence):
 
 def test_revision_cap_retains_unresolved_flags(scripted_llm, evidence):
     scripted_llm([DECOMPOSE, DONE, DRAFT, audit("unsupported"), DRAFT, audit("contradicted")])
-    result = run_pipeline(AskRequest(question="How does this work?"), FakeRetriever(evidence))
+    result = run_pipeline(AskRequest(mode="baseline", question="How does this work?"), FakeRetriever(evidence))
     assert len(result.critique_log) == 2
     assert any("remain unsupported" in warning for warning in result.warnings)
 
 
 def test_supported_draft_is_not_revised(scripted_llm, evidence):
     prompts = scripted_llm([DECOMPOSE, DONE, DRAFT, audit()])
-    result = run_pipeline(AskRequest(question="How does this work?"), FakeRetriever(evidence))
+    result = run_pipeline(AskRequest(mode="baseline", question="How does this work?"), FakeRetriever(evidence))
     assert not result.revised and len(prompts) == 4
 
 
 def test_ablation_disables_critic(scripted_llm, evidence):
     prompts = scripted_llm([DECOMPOSE, DONE, DRAFT])
-    result = run_pipeline(AskRequest(question="How does this work?", critique=False), FakeRetriever(evidence))
+    result = run_pipeline(AskRequest(mode="baseline", question="How does this work?", critique=False), FakeRetriever(evidence))
     assert result.critique_log == [] and len(prompts) == 3
 
 
@@ -75,7 +75,7 @@ def test_hop_limit_and_targeted_query(scripted_llm, evidence):
     missing = {"sufficient": False, "reason": "Missing bridge", "query": "targeted bridge", "missing_fact": "Which passage supports the bridge?"}
     scripted_llm([DECOMPOSE, missing, missing, DRAFT])
     retriever = FakeRetriever(evidence)
-    result = run_pipeline(AskRequest(question="How does this work?", critique=False, max_hops=2), retriever)
+    result = run_pipeline(AskRequest(mode="baseline", question="How does this work?", critique=False, max_hops=2), retriever)
     assert len(result.hop_log) == 2 and retriever.queries[-1] == "targeted bridge"
     assert len(retriever.queries) == 3
     assert any("no new evidence" in w for w in result.warnings)
@@ -84,7 +84,7 @@ def test_hop_limit_and_targeted_query(scripted_llm, evidence):
 
 def test_repeated_query_stops(scripted_llm, evidence):
     scripted_llm([DECOMPOSE, {"sufficient": False, "reason": "Missing", "query": "WHAT IS RETRIEVED!!!", "missing_fact": "What is retrieved?"}, DRAFT])
-    result = run_pipeline(AskRequest(question="How does this work?", critique=False), FakeRetriever(evidence))
+    result = run_pipeline(AskRequest(mode="baseline", question="How does this work?", critique=False), FakeRetriever(evidence))
     assert len(result.hop_log) == 1
     assert any("repeated" in w for w in result.warnings)
 
@@ -105,7 +105,7 @@ def test_citation_integrity_overrides_model(scripted_llm, evidence, citation_ids
 
 def test_abstention_needs_no_critic_call(scripted_llm, evidence):
     prompts = scripted_llm([DECOMPOSE, DONE, {"claims": [], "abstained": True, "limitations": ["No evidence"]}])
-    result = run_pipeline(AskRequest(question="Unknown result?"), FakeRetriever(evidence))
+    result = run_pipeline(AskRequest(mode="baseline", question="Unknown result?"), FakeRetriever(evidence))
     assert result.final.abstained and len(prompts) == 3
     assert result.critique_log[0].verdicts == []
 
@@ -118,7 +118,7 @@ def test_evidence_budget_preserves_later_hops(scripted_llm, evidence):
                   {"sufficient": False, "reason": "Missing first link", "query": "bridge1", "missing_fact": "First link"},
                   {"sufficient": False, "reason": "Missing second link", "query": "bridge2", "missing_fact": "Second link"}, DONE,
                   {"claims": [], "abstained": True, "limitations": []}])
-    result = run_pipeline(AskRequest(question="Complex research question", max_hops=3, top_k=8), ManyRetriever())
+    result = run_pipeline(AskRequest(mode="baseline", question="Complex research question", max_hops=3, top_k=8), ManyRetriever())
     assert len(result.evidence) == 24
     assert [len(h["added_chunk_ids"]) for h in result.hop_log] == [8, 8, 8]
     assert len({e.chunk_id.split("-")[0] for e in result.evidence[:8]}) == 4
@@ -138,7 +138,7 @@ def test_hop_limit_reports_specific_gap(scripted_llm, evidence):
     missing = {"sufficient": False, "reason": "Timing absent", "query": "method retrieval trigger",
                "missing_fact": "What triggers retrieval?"}
     scripted_llm([DECOMPOSE, missing, DRAFT])
-    result = run_pipeline(AskRequest(question="When is retrieval triggered?", critique=False, max_hops=1), FakeRetriever(evidence))
+    result = run_pipeline(AskRequest(mode="baseline", question="When is retrieval triggered?", critique=False, max_hops=1), FakeRetriever(evidence))
     assert result.hop_log[-1]["stop_reason"] == "hop_limit"
     assert any("What triggers retrieval?" in w for w in result.warnings)
 
@@ -150,7 +150,7 @@ def test_optional_policy_revision_flow(scripted_llm, evidence):
     corrected = {"claims": [{"claim_id": "a", "text": "The method predicts a retrieval token; an optional threshold is an alternative policy.", "citation_ids": ["c1"]}],
                  "abstained": False, "limitations": []}
     prompts = scripted_llm([DECOMPOSE, DONE, overstatement, audit("unsupported"), corrected, audit()])
-    result = run_pipeline(AskRequest(question="When does the method retrieve?"), FakeRetriever(source))
+    result = run_pipeline(AskRequest(mode="baseline", question="When does the method retrieve?"), FakeRetriever(source))
     assert result.revised and result.draft.claims[0].text != result.final.claims[0].text
     assert result.final.claims[0].text == corrected["claims"][0]["text"]
     assert "optional/mandatory" in prompts[3]

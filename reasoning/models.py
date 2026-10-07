@@ -79,6 +79,9 @@ class Critique(StrictModel):
 
 
 class AskRequest(StrictModel):
+    mode: Literal["efficient", "baseline"] = "efficient"
+    use_cache: bool = True
+    collection_id: str = Field(default="default", pattern=r"^(default|[0-9a-f]{32})$")
     question: str = Field(min_length=5, max_length=2000)
     critique: bool = True
     top_k: int = Field(default=4, ge=1, le=8)
@@ -86,6 +89,10 @@ class AskRequest(StrictModel):
 
 
 class Result(StrictModel):
+    mode: Literal["efficient", "baseline"] = "baseline"
+    cache_hit: bool = False
+    usage: dict = Field(default_factory=dict)
+    collection_id: str = "default"
     question: str
     subquestions: list[str]
     draft: Answer

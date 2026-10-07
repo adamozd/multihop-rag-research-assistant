@@ -11,6 +11,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from llm.watsonx_client import QuotaExceeded
 from eval.metrics import paper_recall, summarize, support_counts
 from reasoning.models import AskRequest
 from reasoning.pipeline import run_pipeline
@@ -75,7 +76,7 @@ def main():
            "model_id": os.getenv("WATSONX_MODEL_ID"), "region_url": os.getenv("WATSONX_URL"),
            "python": platform.python_version(), "questions_sha256": hashlib.sha256(args.questions.read_bytes()).hexdigest(),
            "corpus_sha256": hashlib.sha256(manifest.read_bytes()).hexdigest() if manifest.exists() else None,
-           "settings": {"max_hops": 2, "top_k": 4, "max_revisions": 1},
+           "settings": {"mode": "baseline", "use_cache": False, "max_hops": 2, "top_k": 4, "max_revisions": 1},
            "rows": [], "failures": [], "review_map": {}}
     run["source_revision"] = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     run["source_sha256"] = {str(p): hashlib.sha256(p.read_bytes()).hexdigest()
@@ -86,10 +87,11 @@ def main():
     run["max_new_tokens"] = os.getenv("WATSONX_MAX_NEW_TOKENS", "3000")
     write_json(output / "questions.json", questions)
     review = []
-    for question in questions:
+    for index, question in enumerate(questions):
+        quota_exhausted = False
         started = time.monotonic()
         try:
-            result = run_pipeline(AskRequest(question=question["question"]), retriever)
+            result = run_pipeline(AskRequest(mode="baseline", use_cache=False, question=question["question"]), retriever)
             write_json(output / f"{question['id']}.json", result.model_dump())
             row = {"id": question["id"], "kind": question["kind"], "should_abstain": question["should_abstain"],
                    "elapsed_seconds": round(time.monotonic() - started, 2), "revised": result.revised}
@@ -106,12 +108,18 @@ def main():
             run["rows"].append(row)
         except Exception as exc:
             run["failures"].append({"id": question["id"], "error": str(exc)})
+            if isinstance(exc, QuotaExceeded):
+                quota_exhausted = True
+                run["stop_reason"] = "token_quota_exhausted"
+                run["not_attempted"] = [q["id"] for q in questions[index + 1:]]
         run["metrics"] = summarize(run["rows"])
         write_json(output / "run.json", run)
         checkpoint = list(review)
         random.Random(42).shuffle(checkpoint)
         write_json(output / "human-review.json", checkpoint)
-        print(f"Completed {question['id']}; failures: {len(run['failures'])}", flush=True)
+        print(f"Processed {question['id']}; failures: {len(run['failures'])}", flush=True)
+        if quota_exhausted:
+            break
     random.Random(42).shuffle(review)
     write_json(output / "human-review.json", review)
     run["completed"] = len(run["rows"]) == len(questions) and not run["failures"]
