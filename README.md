@@ -230,8 +230,6 @@ The separate acceptance run `acceptance-20261005T230751Z` completed **0/3 probes
 
 Across the 11 completed benchmark questions, the **internal critic proxy** changed from 33/36 supported claims (91.67%) to 32/33 (96.97%). Mean expected-paper recall across the six completed multi-hop cases fell from 83.33% to 75.00%; the answerable response rate was 10/11 in both arms. No-answer abstention was not measured. Two questions triggered revision. Fewer claims and lower paper recall mean the higher proxy rate must not be presented as proven answer-quality improvement.
 
-**Independent human-reviewed claim support has not been established.** The saved labels were completed and submitted by the author after AI assistance; they must not be presented as an independent human evaluation. The full benchmark and semantic acceptance remain incomplete. [Sanitized results and limitations](eval/reports/README.md) are committed separately from ignored raw `eval/results/` files.
-
 ## Primary references that I used for implementation
 
 - [IBM ModelInference SDK](https://ibm.github.io/watsonx-ai-python-sdk/v1.4.11/fm_model_inference.html) and [supported model catalog](https://dataplatform.cloud.ibm.com/docs/content/wsj/analyze-data/fm-models.html?context=wx&locale=en)
