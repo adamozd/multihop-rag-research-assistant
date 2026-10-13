@@ -4,6 +4,50 @@ This is a local research prototype developed by me that searches academic papers
 
 The starter corpus covers **RAG and multi-hop question answering**. The pipeline uses plain Python; embeddings and Chroma stay local. All LLM calls, including JSON repair and revision, pass through `llm_call(prompt: str) -> str` in `llm/watsonx_client.py`.
 
+## Architecture
+
+The application runs locally. Retrieved evidence is sent to **IBM watsonx.ai** for reasoning; PDF parsing, embeddings, vector storage, and answer caching stay local.
+
+```mermaid
+flowchart TB
+    subgraph LOCAL["Local application"]
+        subgraph INGEST["Prepare the research collection"]
+            PAPERS["arXiv papers / uploaded PDFs"] --> PARSE["PyMuPDF extraction"]
+            PARSE --> CHUNKS["Section-aware chunks<br/>Paper, section, and page provenance"]
+            CHUNKS --> EMBED["Local BGE passage embeddings"]
+            EMBED --> DB[("Chroma collections")]
+        end
+
+        UI["Streamlit<br/>Questions, citations, and PDF evidence explorer"] <--> API["FastAPI"]
+        API <--> FLOW["Python reasoning pipeline<br/>Efficient or research baseline"]
+        FLOW <--> RETRIEVE["Retriever<br/>Local BGE query embeddings"]
+        RETRIEVE <--> DB
+        FLOW <--> CACHE["Answer cache<br/>Efficient mode only"]
+        FLOW <--> CLIENT["Shared llm_call boundary<br/>Usage tracking, call limits, quota stop"]
+    end
+
+    CLIENT <-->|"Prompts + evidence / model responses"| WATSONX["IBM watsonx.ai · Toronto<br/>Llama 3.3 70B Instruct"]
+
+    classDef storage fill:#eef2ff,stroke:#6366f1,color:#111827;
+    classDef service fill:#e6f5f1,stroke:#16816a,color:#111827;
+    class DB,CACHE storage;
+    class API,CLIENT,WATSONX service;
+```
+
+### Two reasoning modes
+
+| | Efficient mode — default | Research baseline — evaluation |
+| --- | --- | --- |
+| Initial search | Search the original question locally | Decompose into 2–4 subquestions, then retrieve |
+| Evidence gaps | Draft and assess coverage together; allow one targeted follow-up and re-draft only for new usable evidence | A separate controller decides whether to retrieve again, within the hop limit |
+| Claim checking | Review the draft and correct it in one call | Critique the draft; if flagged, revise once and critique again |
+| Model calls | Normally 2, or 3 with a useful follow-up, before JSON repairs | Depends on hops, revision, and JSON repairs |
+| Repeated requests | Eligible cache hits make no inference calls | Cache bypassed |
+
+Both modes return cited claims, source passages, retrieval traces, critique logs, and warnings through the API to Streamlit. Every JSON-expecting model call uses the shared client and permits at most one JSON/schema repair attempt. Efficient mode does **not** separately re-audit its corrected answer; neither mode guarantees claim correctness.
+
+The [live evaluation results](#live-evaluation-status--2026-10-05) belong to the **research baseline**. Efficient mode has offline coverage but has not been evaluated live. For implementation details, see [pipeline dispatch](reasoning/pipeline.py), [efficient reasoning](reasoning/efficient.py), [research baseline](reasoning/baseline.py), and the [watsonx client](llm/watsonx_client.py).
+
 ## Quick start
 
 Use Python **3.12** (the tested version). Run commands from the repository root.
